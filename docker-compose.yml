@@ -1,0 +1,17 @@
+version: "3.8"
+services:
+  postgres:
+    image: postgres:15
+    container_name: atriin-postgres # 변경
+    restart: always
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: atriindb # 변경
+      POSTGRES_USER: atriinuser # 변경
+      POSTGRES_PASSWORD: atriinpassword123! # 변경
+    volumes:
+      - atriin_postgres_data:/var/lib/postgresql/data # 변경
+
+volumes:
+  atriin_postgres_data: # 변경

@@ -1,0 +1,20 @@
+# =========================
+# 1. Vue.js (프론트엔드) 무시 목록
+# =========================
+node_modules/
+dist/
+.env
+
+# =========================
+# 2. Spring Boot (백엔드) 무시 목록
+# =========================
+.gradle
+build/
+!gradle/wrapper/gradle-wrapper.jar
+out/
+.idea/
+*.iml
+*.class
+
+# (중요!) 사용자가 업로드한 이미지/미디어 파일 무시
+ProjectSpring/uploads/
