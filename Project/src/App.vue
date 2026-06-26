@@ -54,6 +54,7 @@
             :key="feed.id"
             class="pin-card"
             :style="{ height: feed.height + 'px' }"
+            @click="openDetail(feed)"
           >
             <img
               v-if="feed.imageUrl"
@@ -71,7 +72,7 @@
             </div>
 
             <div class="card-actions">
-              <button class="action-btn save-btn">📌 저장</button>
+              <button class="action-btn save-btn" @click.stop>📌 저장</button>
             </div>
           </div>
         </div>
@@ -125,6 +126,40 @@
       </div>
     </div>
   </div>
+  <div v-if="showDetailModal && selectedFeed" class="modal-overlay" @click.self="closeDetail">
+    <div class="detail-modal-content">
+      <button class="close-btn" @click="closeDetail">✕</button>
+
+      <div class="detail-layout">
+        <div class="detail-image-area">
+          <img
+            v-if="selectedFeed.imageUrl"
+            :src="'http://localhost:8080' + selectedFeed.imageUrl"
+            alt="Artwork Full"
+          />
+          <div v-else class="no-image">No Image</div>
+        </div>
+
+        <div class="detail-info-area">
+          <div class="detail-header">
+            <span class="media-badge">{{ getBadge(selectedFeed.type) }}</span>
+            <div v-if="selectedFeed.isCollab" class="collab-badge">🤝 협업 모집중</div>
+          </div>
+
+          <h2 class="detail-title">{{ selectedFeed.title }}</h2>
+          <p class="detail-creator">
+            by <strong>{{ selectedFeed.creator }}</strong>
+          </p>
+          <p class="detail-tag">{{ selectedFeed.tag }}</p>
+
+          <div class="detail-actions">
+            <button class="detail-btn like-btn">❤️ 좋아요</button>
+            <button class="detail-btn save-btn">📌 저장</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script setup>
@@ -165,9 +200,25 @@ const formData = ref({
   isCollab: false,
 })
 
+// --- [신규 추가: 상세 보기 모달 상태 관리] ---
+const showDetailModal = ref(false)
+const selectedFeed = ref(null) // 클릭한 카드의 모든 정보(객체)를 통째로 보관
+
 // 파일 보관용 변수 추가
 const selectedFile = ref(null)
 const imagePreview = ref(null)
+
+// 카드 클릭 시 실행될 함수
+const openDetail = (feed) => {
+  selectedFeed.value = feed
+  showDetailModal.value = true
+}
+
+// 닫기 함수
+const closeDetail = () => {
+  showDetailModal.value = false
+  selectedFeed.value = null
+}
 
 // 화면이 처음 렌더링될 때(onMounted) 백엔드 API 호출
 onMounted(async () => {
@@ -708,4 +759,137 @@ const createNewFeed = async () => {
   color: #ccc;
   font-size: 13px;
 }
+/* =========================================
+   Detail Modal CSS
+   ========================================= */
+.detail-modal-content {
+  position: relative;
+  background: #1e1e1e;
+  border-radius: 24px;
+  width: 900px; /* 글쓰기 모달보다 훨씬 넓게 설정 */
+  max-width: 90vw;
+  max-height: 90vh;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
+  display: flex;
+  overflow: hidden; /* 모서리 둥글게 깎기 */
+}
+
+/* 닫기 버튼 (우측 상단 둥둥 띄우기) */
+.close-btn {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  border: none;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  font-size: 20px;
+  cursor: pointer;
+  z-index: 10;
+  transition: background 0.2s;
+}
+.close-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* 좌우 분할 레이아웃 */
+.detail-layout {
+  display: flex;
+  width: 100%;
+  height: 100%;
+}
+
+/* 왼쪽 이미지 영역 */
+.detail-image-area {
+  flex: 6; /* 비율 6 */
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-height: 90vh;
+}
+.detail-image-area img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain; /* 이미지가 잘리지 않고 전체가 다 보이게 */
+}
+.no-image {
+  color: #555;
+  font-size: 18px;
+}
+
+/* 오른쪽 정보 영역 */
+.detail-info-area {
+  flex: 4; /* 비율 4 */
+  padding: 40px;
+  display: flex;
+  flex-direction: column;
+  background: #121212;
+}
+
+.detail-header {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 24px;
+  /* 배지들이 absolute로 날아가지 않도록 위치 초기화 */
+  position: relative;
+}
+.detail-header .media-badge,
+.detail-header .collab-badge {
+  position: relative;
+  top: auto;
+  left: auto;
+}
+
+.detail-title {
+  margin: 0 0 16px 0;
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.detail-creator {
+  margin: 0 0 8px 0;
+  font-size: 16px;
+  color: #aaa;
+}
+.detail-creator strong {
+  color: #fff;
+}
+
+.detail-tag {
+  margin: 0 0 32px 0;
+  font-size: 14px;
+  color: #888;
+}
+
+/* 하단 버튼들 */
+.detail-actions {
+  margin-top: auto; /* 정보창의 맨 아래로 버튼들을 밀어냄 */
+  display: flex;
+  gap: 12px;
+}
+.detail-btn {
+  flex: 1;
+  padding: 16px;
+  border-radius: 12px;
+  border: none;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+.detail-btn:hover {
+  opacity: 0.8;
+}
+.like-btn {
+  background: #333;
+  color: #fff;
+}
+.save-btn {
+  background: #e60023;
+  color: #fff;
+} /* 핀터레스트 레드 컬러 */
 </style>
