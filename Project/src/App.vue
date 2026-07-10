@@ -72,7 +72,13 @@
             </div>
 
             <div class="card-actions">
-              <button class="action-btn save-btn" @click.stop>📌 저장</button>
+              <button
+                class="action-btn save-btn"
+                :class="{ 'is-saved': feed.isBookmarked }"
+                @click.stop="toggleBookmark(feed)"
+              >
+                {{ feed.isBookmarked ? '📌 저장됨' : '📌 저장' }}
+              </button>
             </div>
           </div>
         </div>
@@ -153,8 +159,23 @@
           <p class="detail-tag">{{ selectedFeed.tag }}</p>
 
           <div class="detail-actions">
-            <button class="detail-btn like-btn">❤️ 좋아요</button>
-            <button class="detail-btn save-btn">📌 저장</button>
+            <button
+              class="detail-btn like-btn"
+              :class="{ 'is-liked': selectedFeed.isLiked }"
+              @click="toggleLike(selectedFeed)"
+            >
+              {{ selectedFeed.isLiked ? '❤️ 꽉 찬 하트' : '🤍 빈 하트' }}
+              <span v-if="selectedFeed.likeCount > 0">({{ selectedFeed.likeCount }})</span>
+            </button>
+
+            <button
+              class="detail-btn save-btn"
+              :class="{ 'is-saved': selectedFeed.isBookmarked }"
+              @click="toggleBookmark(selectedFeed)"
+            >
+              {{ selectedFeed.isBookmarked ? '📌 저장 취소' : '📌 북마크에 저장' }}
+              <span v-if="selectedFeed.bookmarkCount > 0">({{ selectedFeed.bookmarkCount }})</span>
+            </button>
           </div>
         </div>
       </div>
@@ -200,7 +221,7 @@ const formData = ref({
   isCollab: false,
 })
 
-// --- [신규 추가: 상세 보기 모달 상태 관리] ---
+// 상세 보기 모달 상태 관리
 const showDetailModal = ref(false)
 const selectedFeed = ref(null) // 클릭한 카드의 모든 정보(객체)를 통째로 보관
 
@@ -218,6 +239,36 @@ const openDetail = (feed) => {
 const closeDetail = () => {
   showDetailModal.value = false
   selectedFeed.value = null
+}
+
+// 상호작용(좋아요, 북마크) 로직
+const currentUsername = 'AtriinUser' // 임시 회원(로그인 기능 구현 전까지 사용)
+
+// 좋아요 토글 함수
+const toggleLike = async (feed) => {
+  try {
+    const response = await axios.post(
+      `http://localhost:8080/api/feeds/${feed.id}/like?username=${currentUsername}`,
+    )
+    // 서버에서 응답받은 상태(true/false)와 총 개수로 화면을 즉시 업데이트합니다.
+    feed.isLiked = response.data.toggled
+    feed.likeCount = response.data.totalCount
+  } catch (error) {
+    console.error('좋아요 처리 실패:', error)
+  }
+}
+
+// 북마크 토글 함수
+const toggleBookmark = async (feed) => {
+  try {
+    const response = await axios.post(
+      `http://localhost:8080/api/feeds/${feed.id}/bookmark?username=${currentUsername}`,
+    )
+    feed.isBookmarked = response.data.toggled
+    feed.bookmarkCount = response.data.totalCount
+  } catch (error) {
+    console.error('북마크 처리 실패:', error)
+  }
 }
 
 // 화면이 처음 렌더링될 때(onMounted) 백엔드 API 호출
@@ -242,6 +293,38 @@ const getBadge = (type) => {
   return '✨'
 }
 
+// 현재 선택된 메뉴가 무엇인지 기억하는 변수
+const currentMenu = ref('all')
+
+// 💡 통합 데이터 로드 함수
+const loadFeeds = async (menuType) => {
+  currentMenu.value = menuType // 클릭한 메뉴(art, music 등)로 상태 변경
+
+  try {
+    let url = 'http://localhost:8080/api/feeds'
+
+    // 카테고리 필터링일 때
+    if (menuType !== 'all' && menuType !== 'bookmark') {
+      url = `http://localhost:8080/api/feeds?type=${menuType}`
+    }
+    // 북마크 모아보기일 때
+    else if (menuType === 'bookmark') {
+      url = `http://localhost:8080/api/feeds/bookmarks?username=${currentUsername}`
+    }
+
+    // 서버에서 필터링된 데이터를 받아와서 화면 배열(mixedFeeds)을 통째로 갈아끼움
+    const response = await axios.get(url)
+    mixedFeeds.value = response.data
+  } catch (error) {
+    console.error('데이터 로드 실패:', error)
+  }
+}
+
+// 💡 페이지가 처음 켜질 때는 전체(all) 데이터를 불러옵니다.
+onMounted(() => {
+  loadFeeds('all')
+})
+
 // 서버로 데이터 전송 (POST)
 const createNewFeed = async () => {
   if (!formData.value.title || !formData.value.creator || !formData.value.tag) {
@@ -251,7 +334,7 @@ const createNewFeed = async () => {
 
   const randomHeight = Math.floor(Math.random() * 200) + 200
 
-  // JSON 대신 FormData라는 객체에 데이터를 하나씩 쌓아서 보냅니다. (파일 전송의 핵심)
+  // JSON 대신 FormData 객체에 데이터 쌓아서 보내기
   const payload = new FormData()
   payload.append('title', formData.value.title)
   payload.append('creator', formData.value.creator)
@@ -884,6 +967,38 @@ const createNewFeed = async () => {
 .detail-btn:hover {
   opacity: 0.8;
 }
+
+/* =========================================
+   상호작용 버튼 Active(활성화) 상태 CSS
+   ========================================= */
+
+/* 그리드 카드 내 저장 버튼 활성화 상태 */
+.action-btn.save-btn.is-saved {
+  background-color: #000;
+  color: #fff;
+  border: 1px solid #333;
+}
+
+/* 상세 모달 내 버튼 비활성화(기본) 상태 */
+.detail-btn.like-btn {
+  background: #222;
+  color: #ccc;
+}
+.detail-btn.save-btn {
+  background: #222;
+  color: #ccc;
+}
+
+/* 상세 모달 내 버튼 활성화(눌림) 상태 */
+.detail-btn.like-btn.is-liked {
+  background: #ff2a5f; /* 핑크/레드 톤 */
+  color: #fff;
+}
+.detail-btn.save-btn.is-saved {
+  background: #0066ff; /* 블루 톤 (핀터레스트 레드로 변경해도 좋습니다) */
+  color: #fff;
+}
+
 .like-btn {
   background: #333;
   color: #fff;
