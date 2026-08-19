@@ -4,24 +4,36 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "bookmarks")
+@Table(name = "users")
 @Getter @Setter
 @NoArgsConstructor
-public class Bookmark {
+public class User {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "feed_id", nullable = false)
-    private Feed feed;
+    @Column(nullable = false, unique = true)
+    private String email;
 
     @Column(nullable = false)
+    private String password;
+
+    @Column(nullable = false, unique = true)
     private String username;
+
+    @Column(name = "nickname")
+    private String nickname;
+
+    @Column(name = "profile_image_url")
+    private String profileImageUrl;
+
+    @Column(name = "tag")
+    private String tag;
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;
@@ -29,10 +41,5 @@ public class Bookmark {
     @PrePersist
     protected void onCreate() {
         this.createdAt = LocalDateTime.now();
-    }
-
-    public Bookmark(Feed feed, String username) {
-        this.feed = feed;
-        this.username = username;
     }
 }

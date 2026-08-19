@@ -13,5 +13,12 @@ services:
     volumes:
       - atriin_postgres_data:/var/lib/postgresql/data # 변경
 
+  redis:
+    image: redis:7
+    container_name: atriin-redis
+    restart: always
+    ports:
+      - "6379:6379"
+
 volumes:
   atriin_postgres_data: # 변경

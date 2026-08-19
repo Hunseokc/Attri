@@ -16,7 +16,7 @@ public class Tag {
     private Long id;
 
     @Column(unique = true, nullable = false)
-    private String name; // 예: "CityPop", "Illustration", "Mixing"
+    private String name;
 
     public Tag(String name) {
         this.name = name;

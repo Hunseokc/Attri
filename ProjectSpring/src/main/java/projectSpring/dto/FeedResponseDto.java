@@ -7,10 +7,15 @@ import lombok.Getter;
 @AllArgsConstructor
 public class FeedResponseDto {
     private Long id;
+    private String creator; // Add creator field
     private String type;
     private String title;
-    private String tag;     // Vue에서 요구하는 형태 (예: "#Mixing")
+    private String tag;
     private int height;
     private boolean isCollab;
     private String imageUrl;
+    private String videoUrl;
+    private String content;
+    private boolean hideCounts;
+    private boolean disableComments;
 }

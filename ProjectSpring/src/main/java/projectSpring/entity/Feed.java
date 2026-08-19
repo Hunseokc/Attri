@@ -30,24 +30,35 @@ public class Feed {
     private String type; // 미디어 타입: "music", "art", "video"
 
     @Column(nullable = false)
-    private int height; // 핀터레스트 레이아웃용 고유 높이 값 (예: 250, 350)
+    private int height; // 핀터레스트 느낌 레이아웃용 고유 높이 값 (250, 350)
 
     @Column(name = "is_collab", nullable = false)
-    private boolean isCollab; // 🤝 협업 모집 여부 (true/false)
+    private boolean isCollab; // 협업 모집 여부 true/false (지금은 이모티콘 🤝 으로 간소화)
+
+    @Column(columnDefinition = "TEXT")
+    private String content; // 본문 글 (선택적)
+
+    @Column(name = "hide_counts", columnDefinition = "boolean default false")
+    private boolean hideCounts = false; // 좋아요/조회수 숨기기
+
+    @Column(name = "disable_comments", columnDefinition = "boolean default false")
+    private boolean disableComments = false; // 댓글 해제
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
     @Column(name = "image_url")
-    private String imageUrl; // 💡 이미지 경로 저장할 컬럼
+    private String imageUrl; // 이미지(썸네일) 경로 저장
 
-    // 💡 고급 기능: PostgreSQL의 장점을 살린 JSON 확장 컬럼 (선택 사항)
-    // 음악의 BPM이나 아트의 해상도 등 타입별 가변 데이터를 스키마 변경 없이 JSON으로 저장할 수 있습니다.
+    @Column(name = "video_url")
+    private String videoUrl; // 비디오 경로 저장 (비디오일 경우)
+
+    // BPM, 아트 해상도 등 타입별 데이터는 스키마 변경 없이 JSON으로 저장
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
     private String metadata;
 
-    // 태그와의 다대다(Many-to-Many) 관계 설정
+    // 태그와의 N:N 관계 설정
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "feed_tags",

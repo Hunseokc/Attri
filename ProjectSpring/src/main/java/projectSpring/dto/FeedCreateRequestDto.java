@@ -11,7 +11,10 @@ public class FeedCreateRequestDto {
     private String title;
     private String creator;
     private String type;     // "music", "art", "video"
-    private String tag;      // 예: "Mixing" (프론트에서 입력한 태그)
+    private String tag;
     private int height;
     private boolean isCollab;
+    private String content;
+    private boolean hideCounts;
+    private boolean disableComments;
 }

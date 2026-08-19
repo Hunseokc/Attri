@@ -19,7 +19,7 @@ public class DataSeeder implements CommandLineRunner {
     public void run(String... args) throws Exception {
         if (feedRepository.count() == 0) {
 
-            // 💡 수정된 부분: 무작정 save하지 않고, DB에 있으면 꺼내오고 없으면 저장합니다!
+            // DB에 있으면 꺼내오고 없으면 저장
             Tag mixing = tagRepository.findByName("Mixing")
                     .orElseGet(() -> tagRepository.save(new Tag("Mixing")));
             Tag illustration = tagRepository.findByName("Illustration")
@@ -27,7 +27,7 @@ public class DataSeeder implements CommandLineRunner {
             Tag beat = tagRepository.findByName("Beat")
                     .orElseGet(() -> tagRepository.save(new Tag("Beat")));
 
-            // 2. 피드 생성 (이 아래는 기존 코드와 동일합니다)
+            // 2. 피드 생성
             Feed feed1 = new Feed();
             feed1.setTitle("Rs124-style Compression Test");
             feed1.setCreator("MixMaster");
@@ -57,7 +57,7 @@ public class DataSeeder implements CommandLineRunner {
             feedRepository.save(feed2);
             feedRepository.save(feed3);
 
-            System.out.println("✅ 초기 테스트 데이터가 DB에 성공적으로 저장되었습니다!");
+            System.out.println("초기 테스트 데이터가 DB에 성공적으로 저장되었습니다!");
         }
     }
 }
