@@ -6,6 +6,8 @@ import projectSpring.entity.Comment;
 import projectSpring.entity.Feed;
 import projectSpring.repository.CommentRepository;
 import projectSpring.repository.FeedRepository;
+import projectSpring.repository.UserRepository;
+import projectSpring.entity.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,6 +21,7 @@ public class CommentService {
 
     private final CommentRepository commentRepository;
     private final FeedRepository feedRepository;
+    private final UserRepository userRepository;
 
     // 💡 1. 댓글 작성
     @Transactional
@@ -71,7 +74,10 @@ public class CommentService {
         Comment comment = commentRepository.findById(commentId)
                 .orElseThrow(() -> new IllegalArgumentException("댓글을 찾을 수 없습니다."));
         
-        if (!comment.getUsername().equals(requestDto.getUsername())) {
+        User user = userRepository.findByUsername(requestDto.getUsername())
+                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
+
+        if (!comment.getUsername().equals(requestDto.getUsername()) && !user.isAdmin()) {
              throw new IllegalArgumentException("수정 권한이 없습니다.");
         }
         
@@ -92,7 +98,10 @@ public class CommentService {
         Comment comment = commentRepository.findById(commentId)
                 .orElseThrow(() -> new IllegalArgumentException("댓글을 찾을 수 없습니다."));
                 
-        if (!comment.getUsername().equals(username)) {
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
+
+        if (!comment.getUsername().equals(username) && !user.isAdmin()) {
             throw new IllegalArgumentException("삭제 권한이 없습니다.");
         }
         

@@ -61,6 +61,32 @@ public class UserController {
         }
     }
 
+    @PostMapping("/{username}/follow")
+    public ResponseEntity<?> toggleFollow(@PathVariable String username, java.security.Principal principal) {
+        if (principal == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("로그인되지 않은 사용자입니다.");
+        }
+        try {
+            boolean isFollowing = userService.toggleFollow(principal.getName(), username);
+            return ResponseEntity.ok(java.util.Map.of("isFollowing", isFollowing));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
+    }
+
+    @GetMapping("/{username}/follow/status")
+    public ResponseEntity<?> getFollowStatus(@PathVariable String username, java.security.Principal principal) {
+        if (principal == null) {
+            return ResponseEntity.ok(java.util.Map.of("isFollowing", false));
+        }
+        try {
+            boolean isFollowing = userService.isFollowing(principal.getName(), username);
+            return ResponseEntity.ok(java.util.Map.of("isFollowing", isFollowing));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
+    }
+
     @GetMapping("/profile")
     public ResponseEntity<?> getProfile(java.security.Principal principal) {
         if (principal == null) {

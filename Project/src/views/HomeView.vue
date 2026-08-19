@@ -14,9 +14,9 @@
               <span class="menu-text">Home</span>
             </li>
 
-            <li :class="{ active: currentMenu === 'art' }" @click="loadFeeds('art')">
-              <Compass class="icon" />
-              <span class="menu-text">Explore (Art)</span>
+            <li :class="{ active: currentMenu === 'following' }" @click="loadFeeds('following')">
+              <Users class="icon" />
+              <span class="menu-text">Following</span>
             </li>
 
             <li :class="{ active: currentMenu === 'bookmark' }" @click="loadFeeds('bookmark')">
@@ -24,9 +24,10 @@
               <span class="menu-text">My Board</span>
             </li>
 
-            <li>
+            <li :class="{ active: currentMenu === 'messages' }" @click="openMessages">
               <MessageSquare class="icon" />
               <span class="menu-text">Messages</span>
+              <span v-if="totalUnreadCount > 0" class="unread-badge">{{ totalUnreadCount }}</span>
             </li>
             <li :class="{ active: currentMenu === 'profile' }" @click="loadFeeds('profile')">
               <User class="icon" />
@@ -65,7 +66,7 @@
     </div>
 
     <main class="main-content">
-      <div v-if="currentMenu !== 'profile'" class="default-feed-content">
+      <div v-if="currentMenu !== 'profile' && currentMenu !== 'messages'" class="default-feed-content">
         <header class="search-header">
           <div class="search-wrapper">
             <Search class="search-icon" />
@@ -79,7 +80,6 @@
             v-for="feed in mixedFeeds"
             :key="feed.id"
             class="pin-card"
-            :style="{ height: feed.height + 'px' }"
             @click="openDetail(feed)"
             @mouseenter="playVideo($event, feed)"
             @mouseleave="stopVideo($event, feed)"
@@ -103,21 +103,13 @@
               alt="Artwork"
             />
 
-            <div class="media-badge">{{ getBadge(feed.type) }}</div>
-            <div v-if="feed.isCollab" class="collab-badge">🤝</div>
-
-            <div class="pin-content">
-              <h3>{{ feed.title }}</h3>
-              <p class="tag">{{ feed.tag }}</p>
-            </div>
-
             <div class="card-actions">
               <button
                 class="action-btn save-btn"
                 :class="{ 'is-saved': feed.isBookmarked }"
                 @click.stop="toggleBookmark(feed)"
               >
-                {{ feed.isBookmarked ? '📌 저장됨' : '📌 저장' }}
+                {{ feed.isBookmarked ? '저장됨' : '저장' }}
               </button>
             </div>
           </div>
@@ -125,8 +117,160 @@
       </div>
       </div>
       
+      <!-- ==== 메시지(DM) 뷰 ==== -->
+      <div v-else-if="currentMenu === 'messages'" class="messages-page">
+        <div class="dm-container">
+          <!-- 좌측: 채팅방 목록 -->
+          <div class="dm-sidebar">
+            <div class="dm-sidebar-header">
+              <h2>메시지</h2>
+              <button class="dm-new-chat-btn" @click="showNewChatModal = true">
+                <Plus class="icon-sm" />
+              </button>
+            </div>
+
+            <div class="dm-room-list">
+              <div v-if="chatRooms.length === 0" class="dm-empty">
+                <MessageSquare class="dm-empty-icon" />
+                <p>아직 대화가 없습니다</p>
+                <button class="dm-start-btn" @click="showNewChatModal = true">새 대화 시작</button>
+              </div>
+
+              <div
+                v-for="room in chatRooms"
+                :key="room.roomId"
+                class="dm-room-item"
+                :class="{ active: selectedRoom && selectedRoom.roomId === room.roomId }"
+                @click="selectRoom(room)"
+              >
+                <div class="dm-room-avatar">
+                  <img
+                    v-if="room.otherProfileImageUrl"
+                    :src="'http://localhost:8080' + room.otherProfileImageUrl"
+                    alt="avatar"
+                  />
+                  <div v-else class="dm-avatar-placeholder">
+                    {{ (room.otherNickname || room.otherUsername).charAt(0).toUpperCase() }}
+                  </div>
+                </div>
+                <div class="dm-room-info">
+                  <span class="dm-room-name">{{ room.otherNickname || room.otherUsername }}</span>
+                  <span class="dm-room-preview">{{ room.lastMessage || '대화를 시작하세요' }}</span>
+                </div>
+                <div class="dm-room-meta">
+                  <span class="dm-room-time">{{ formatChatTime(room.lastMessageTime) }}</span>
+                  <span v-if="room.unreadCount > 0" class="dm-unread-count">{{ room.unreadCount }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 우측: 대화 내용 -->
+          <div class="dm-chat-area">
+            <div v-if="!selectedRoom" class="dm-no-selection">
+              <MessageSquare class="dm-no-selection-icon" />
+              <h3>내 메시지</h3>
+              <p>친구에게 메시지를 보내보세요</p>
+              <button class="dm-start-btn" @click="showNewChatModal = true">메시지 보내기</button>
+            </div>
+
+            <template v-else>
+              <!-- 채팅 헤더 -->
+              <div class="dm-chat-header">
+                <div class="dm-chat-header-avatar">
+                  <img
+                    v-if="selectedRoom.otherProfileImageUrl"
+                    :src="'http://localhost:8080' + selectedRoom.otherProfileImageUrl"
+                    alt="avatar"
+                  />
+                  <div v-else class="dm-avatar-placeholder sm">
+                    {{ (selectedRoom.otherNickname || selectedRoom.otherUsername).charAt(0).toUpperCase() }}
+                  </div>
+                </div>
+                <span class="dm-chat-header-name">{{ selectedRoom.otherNickname || selectedRoom.otherUsername }}</span>
+              </div>
+
+              <!-- 메시지 목록 -->
+              <div class="dm-messages" ref="dmMessagesContainer">
+                <div
+                  v-for="msg in chatMessages"
+                  :key="msg.id"
+                  class="dm-msg"
+                  :class="{ 'dm-msg-mine': msg.sender === currentUsername }"
+                >
+                  <div class="dm-msg-bubble">
+                    {{ msg.content }}
+                  </div>
+                  <span class="dm-msg-time">{{ formatChatTime(msg.createdAt) }}</span>
+                </div>
+              </div>
+
+              <!-- 메시지 입력 -->
+              <div class="dm-input-area">
+                <input
+                  v-model="newMessage"
+                  type="text"
+                  placeholder="메시지 입력..."
+                  @keyup.enter="sendChatMessage"
+                  class="dm-input"
+                />
+                <button class="dm-send-btn" @click="sendChatMessage" :disabled="!newMessage.trim()">
+                  <Send class="icon-sm" />
+                </button>
+              </div>
+            </template>
+          </div>
+        </div>
+      </div>
+      <!-- ==== 메시지(DM) 뷰 끝 ==== -->
+
+      <!-- 새 대화 시작 모달 -->
+      <div v-if="showNewChatModal" class="modal-overlay" @click.self="showNewChatModal = false">
+        <div class="dm-new-chat-modal">
+          <div class="dm-modal-header">
+            <h3>새로운 메시지</h3>
+            <button class="dm-modal-close" @click="showNewChatModal = false">&times;</button>
+          </div>
+          <div class="dm-modal-search">
+            <input
+              v-model="userSearchKeyword"
+              type="text"
+              placeholder="유저 이름으로 검색..."
+              @input="searchUsersForChat"
+              class="dm-search-input"
+            />
+          </div>
+          <div class="dm-modal-results">
+            <div
+              v-for="user in userSearchResults"
+              :key="user.username"
+              class="dm-search-result-item"
+              @click="startChatWith(user)"
+            >
+              <div class="dm-room-avatar">
+                <img
+                  v-if="user.profileImageUrl"
+                  :src="'http://localhost:8080' + user.profileImageUrl"
+                  alt="avatar"
+                />
+                <div v-else class="dm-avatar-placeholder">
+                  {{ (user.nickname || user.username).charAt(0).toUpperCase() }}
+                </div>
+              </div>
+              <div class="dm-search-result-info">
+                <span class="dm-search-result-name">{{ user.nickname || user.username }}</span>
+                <span class="dm-search-result-username">@{{ user.username }}</span>
+              </div>
+            </div>
+            <p v-if="userSearchKeyword && userSearchResults.length === 0" class="dm-no-results">
+              검색 결과가 없습니다
+            </p>
+          </div>
+        </div>
+      </div>
+
       <!-- ==== 프로필 뷰 콘텐츠 ==== -->
-      <div v-else class="profile-page-content">
+      <div v-else-if="currentMenu === 'profile'" class="profile-page-content">
         <!-- 1. 프로필 헤더 정보 영역 -->
         <header class="profile-header-centered">
           <div class="profile-avatar-container large-center" @click="triggerDirectProfileImageUpload">
@@ -379,7 +523,7 @@
             <span class="count-text" v-if="selectedFeed.likeCount > 0">{{ selectedFeed.likeCount }}</span>
           </button>
           <button class="icon-btn-text" @click="focusCommentInput"><MessageCircle class="icon-medium" /></button>
-          <button class="icon-btn-text" @click="showAlert('공유 기능이 준비 중입니다.')"><Upload class="icon-medium" /></button> <!-- Share -->
+          <button class="icon-btn-text" @click="startChatWithCreator(selectedFeed)" title="메시지 보내기"><Send class="icon-medium" /></button> <!-- Direct Message -->
           <button class="icon-btn-text" @click="showMoreOptionsModal = true"><MoreHorizontal class="icon-medium" /></button> <!-- More -->
           <div class="profile-dropdown-btn">
             프로필 <ChevronDown class="icon-small" />
@@ -413,10 +557,19 @@
         <!-- 우측: 정보 및 댓글 영역 -->
         <div class="pinterest-info-pane">
           <div class="pinterest-scrollable-content">
-            <!-- 작성자 프로필 -->
             <div class="pinterest-author">
               <div class="avatar-placeholder-medium"><User class="icon-small" /></div>
-              <span class="username"><strong>{{ selectedFeed.creator }}</strong></span>
+              <div class="author-info" style="display:flex; flex-direction:column; gap:4px; margin-left: 12px; flex:1;">
+                <span class="username" style="font-size: 16px;"><strong>{{ selectedFeed.creator }}</strong></span>
+              </div>
+              <button 
+                v-if="currentUsername && selectedFeed.creator !== currentUsername"
+                class="follow-btn" 
+                :class="{ 'is-following': selectedFeed.isFollowing }"
+                @click="toggleFollowCreator"
+              >
+                {{ selectedFeed.isFollowing ? '팔로잉' : '팔로우' }}
+              </button>
             </div>
 
             <!-- 설명 (Caption) -->
@@ -441,12 +594,12 @@
                   <div class="comment-header-row">
                     <span class="comment-author"><strong>{{ comment.username }}</strong></span>
                     
-                    <!-- 수정/삭제 버튼 (본인 댓글일 경우) -->
-                    <div class="comment-actions" v-if="comment.username === currentUsername">
-                      <button class="action-text-btn" @click="startEditComment(comment)" v-if="editingCommentId !== comment.id">수정</button>
-                      <button class="action-text-btn" @click="saveEditComment(comment.id)" v-if="editingCommentId === comment.id">저장</button>
+                    <!-- 수정/삭제 버튼 -->
+                    <div class="comment-actions" v-if="isAdmin || comment.username === currentUsername">
+                      <button class="action-text-btn" @click="startEditComment(comment)" v-if="comment.username === currentUsername && editingCommentId !== comment.id">수정</button>
+                      <button class="action-text-btn" @click="saveEditComment(comment.id)" v-if="comment.username === currentUsername && editingCommentId === comment.id">저장</button>
                       <button class="action-text-btn delete" @click="deleteComment(comment.id)">삭제</button>
-                      <button class="action-text-btn cancel" @click="editingCommentId = null" v-if="editingCommentId === comment.id">취소</button>
+                      <button class="action-text-btn cancel" @click="editingCommentId = null" v-if="comment.username === currentUsername && editingCommentId === comment.id">취소</button>
                     </div>
                   </div>
 
@@ -485,7 +638,7 @@
           <button class="more-option-btn text-red" @click="handleReport">신고</button>
           <button class="more-option-btn" @click="copyLink">링크 복사</button>
           <button class="more-option-btn" @click="handleAccountInfo">이 계정 정보</button>
-          <button class="more-option-btn text-red" v-if="selectedFeed && selectedFeed.creator === currentUsername" @click="handleDeleteFeed">삭제</button>
+          <button class="more-option-btn text-red" v-if="isAdmin || (selectedFeed && selectedFeed.creator === currentUsername)" @click="handleDeleteFeed">삭제</button>
           <button class="more-option-btn" @click="showMoreOptionsModal = false">취소</button>
         </div>
       </div>
@@ -499,7 +652,7 @@ import { ref, computed, onMounted } from 'vue'
 import api from '../api/axios' // 커스텀 axios 인터셉터 임포트
 import {
   Home,
-  Compass,
+  Users,
   Bookmark,
   MessageSquare,
   User,
@@ -544,6 +697,7 @@ onMounted(() => {
 })
 onUnmounted(() => {
   document.removeEventListener('click', handleClickOutside)
+  stopChatPolling()
 })
 
 const goTo = (path) => {
@@ -596,8 +750,10 @@ const closeCreateModal = () => {
   resetForm()
 }
 
+const currentUsername = ref('AtriinUser') // 나중에 fetchProfile에서 실제 유저명으로 덮어씀
+
 const resetForm = () => {
-  formData.value = { content: '', creator: currentUsername, type: 'art', tag: '', isCollab: false, hideCounts: false, disableComments: false }
+  formData.value = { content: '', creator: currentUsername.value, type: 'art', tag: '', isCollab: false, hideCounts: false, disableComments: false }
   selectedFile.value = null
   selectedThumbnail.value = null
   imagePreview.value = null
@@ -652,7 +808,7 @@ const handleFileChange = (event) => {
 // 사용자가 입력할 폼 데이터 보관함
 const formData = ref({
   content: '',
-  creator: currentUsername,
+  creator: currentUsername.value,
   type: 'art', // 기본값
   tag: '',
   isCollab: false,
@@ -690,7 +846,7 @@ const handleAccountInfo = () => {
 const handleDeleteFeed = async () => {
   if (!confirm('정말 이 게시물을 삭제하시겠습니까?')) return
   try {
-    await api.delete(`/feeds/${selectedFeed.value.id}?username=${currentUsername}`)
+    await api.delete(`/feeds/${selectedFeed.value.id}?username=${currentUsername.value}`)
     showMoreOptionsModal.value = false
     closeDetail()
     await loadFeeds(currentMenu.value)
@@ -724,7 +880,7 @@ const saveEditComment = async (commentId) => {
   if (!editingCommentContent.value.trim()) return
   try {
     await api.put(`/feeds/${selectedFeed.value.id}/comments/${commentId}`, {
-      username: currentUsername,
+      username: currentUsername.value,
       content: editingCommentContent.value
     })
     editingCommentId.value = null
@@ -739,7 +895,7 @@ const saveEditComment = async (commentId) => {
 const deleteComment = async (commentId) => {
   if (!confirm('댓글을 삭제하시겠습니까?')) return
   try {
-    await api.delete(`/feeds/${selectedFeed.value.id}/comments/${commentId}?username=${currentUsername}`)
+    await api.delete(`/feeds/${selectedFeed.value.id}/comments/${commentId}?username=${currentUsername.value}`)
     await fetchComments(selectedFeed.value.id)
   } catch (error) {
     console.error('댓글 삭제 실패', error)
@@ -761,7 +917,7 @@ const submitComment = async () => {
   
   try {
     await api.post(`/feeds/${selectedFeed.value.id}/comments`, {
-      username: currentUsername,
+      username: currentUsername.value,
       content: newComment.value
     })
     newComment.value = ''
@@ -778,6 +934,28 @@ const openDetail = async (feed) => {
   showDetailModal.value = true
   comments.value = [] // 열 때 초기화
   await fetchComments(feed.id)
+
+  if (currentUsername.value && feed.creator !== currentUsername.value) {
+    try {
+      const res = await api.get(`/users/${feed.creator}/follow/status`)
+      selectedFeed.value.isFollowing = res.data.isFollowing
+    } catch (e) {
+      console.error('팔로우 상태 조회 실패', e)
+    }
+  }
+}
+
+const toggleFollowCreator = async () => {
+  if (!selectedFeed.value || !currentUsername.value) return
+  try {
+    const res = await api.post(`/users/${selectedFeed.value.creator}/follow`)
+    selectedFeed.value.isFollowing = res.data.isFollowing
+  } catch (error) {
+    console.error('팔로우 처리 실패', error)
+    if (error.response?.status === 401) {
+      alert('로그인이 필요한 기능입니다.')
+    }
+  }
 }
 
 // 닫기 함수
@@ -817,13 +995,12 @@ const stopVideo = (event, feed) => {
 }
 
 // 상호작용(좋아요, 북마크) 로직
-const currentUsername = 'AtriinUser' // 임시 회원(로그인 기능 구현 전까지 사용)
 
 // 좋아요 토글 함수
 const toggleLike = async (feed) => {
   try {
     const response = await api.post(
-      `/feeds/${feed.id}/like?username=${currentUsername}`
+      `/feeds/${feed.id}/like?username=${currentUsername.value}`
     )
     // 서버에서 응답받은 상태(true/false)와 총 개수로 화면을 즉시 업데이트합니다.
     feed.isLiked = response.data.toggled
@@ -837,7 +1014,7 @@ const toggleLike = async (feed) => {
 const toggleBookmark = async (feed) => {
   try {
     const response = await api.post(
-      `/feeds/${feed.id}/bookmark?username=${currentUsername}`
+      `/feeds/${feed.id}/bookmark?username=${currentUsername.value}`
     )
     feed.isBookmarked = response.data.toggled
     feed.bookmarkCount = response.data.totalCount
@@ -849,11 +1026,10 @@ const toggleBookmark = async (feed) => {
 // 화면이 처음 렌더링될 때(onMounted) 백엔드 API 호출
 onMounted(async () => {
   try {
-    // currentUsername은 임시로 토큰에서 가져오거나 위에서 선언한 값 사용
-    const localUser = localStorage.getItem('username')
-    if (localUser) {
-      // currentUsername = localUser // 현재 상수로 되어있어서 덮어쓸 수 없음
-    }
+    // 1. 프로필 정보를 미리 로드하여 isAdmin과 currentUsername 세팅
+    await fetchProfile()
+    
+    // 2. 전체 피드 목록 조회
     const response = await api.get('/feeds')
     mixedFeeds.value = response.data
   } catch (error) {
@@ -874,6 +1050,7 @@ const currentMenu = ref('all')
 // 💡 통합 데이터 로드 함수
 const loadFeeds = async (menuType) => {
   currentMenu.value = menuType // 클릭한 메뉴(art, music 등)로 상태 변경
+  stopChatPolling() // 다른 메뉴로 이동 시 채팅 polling 중지
 
   try {
     if (menuType === 'profile') {
@@ -885,12 +1062,16 @@ const loadFeeds = async (menuType) => {
     let url = '/feeds'
 
     // 카테고리 필터링일 때
-    if (menuType !== 'all' && menuType !== 'bookmark') {
+    if (menuType !== 'all' && menuType !== 'bookmark' && menuType !== 'following') {
       url = `/feeds?type=${menuType}`
     }
     // 북마크 모아보기일 때
     else if (menuType === 'bookmark') {
-      url = `/feeds/bookmarks?username=${currentUsername}`
+      url = `/feeds/bookmarks?username=${currentUsername.value}`
+    }
+    // 팔로잉 피드일 때
+    else if (menuType === 'following') {
+      url = `/feeds/following?username=${currentUsername.value}`
     }
 
     const response = await api.get(url)
@@ -908,8 +1089,10 @@ const userProfile = ref({
   tag: '',
   postCount: 0,
   followerCount: 0,
-  followingCount: 0
+  followingCount: 0,
+  isAdmin: false
 })
+const isAdmin = ref(false)
 const activeTab = ref('posts') // 'posts', 'interactions', 'collabs'
 const postsFeeds = ref([])
 const interactionsFeeds = ref([])
@@ -955,6 +1138,10 @@ const fetchProfile = async () => {
   try {
     const res = await api.get('/users/profile')
     userProfile.value = res.data
+    isAdmin.value = res.data.isAdmin
+    if (res.data.username) {
+      currentUsername.value = res.data.username
+    }
   } catch (error) {
     console.error('프로필 로드 실패', error)
   }
@@ -963,14 +1150,14 @@ const fetchProfile = async () => {
 const fetchTabFeeds = async (tab) => {
   try {
     if (tab === 'posts') {
-      const res = await api.get(`/feeds/user?username=${currentUsername}`)
+      const res = await api.get(`/feeds/user?username=${currentUsername.value}`)
       postsFeeds.value = res.data
     } else if (tab === 'interactions') {
       // 보관, 좋아요, 댓글 단 게시물 병합
       const [bookmarks, liked, commented] = await Promise.all([
-        api.get(`/feeds/bookmarks?username=${currentUsername}`).catch(()=>({data:[]})),
-        api.get(`/feeds/liked?username=${currentUsername}`).catch(()=>({data:[]})),
-        api.get(`/feeds/commented?username=${currentUsername}`).catch(()=>({data:[]}))
+        api.get(`/feeds/bookmarks?username=${currentUsername.value}`).catch(()=>({data:[]})),
+        api.get(`/feeds/liked?username=${currentUsername.value}`).catch(()=>({data:[]})),
+        api.get(`/feeds/commented?username=${currentUsername.value}`).catch(()=>({data:[]}))
       ])
       const combined = [...bookmarks.data, ...liked.data, ...commented.data]
       const uniqueFeeds = combined.reduce((acc, current) => {
@@ -1033,6 +1220,151 @@ const saveProfile = async () => {
   }
 }
 // ==== 프로필 관련 로직 끝 ====
+
+// ==== DM 채팅 관련 로직 시작 ====
+const chatRooms = ref([])
+const selectedRoom = ref(null)
+const chatMessages = ref([])
+const newMessage = ref('')
+const showNewChatModal = ref(false)
+const userSearchKeyword = ref('')
+const userSearchResults = ref([])
+const totalUnreadCount = ref(0)
+const dmMessagesContainer = ref(null)
+let chatPollingTimer = null
+
+const openMessages = () => {
+  currentMenu.value = 'messages'
+  loadChatRooms()
+  // 5초 간격 polling 시작
+  stopChatPolling()
+  chatPollingTimer = setInterval(() => {
+    loadChatRooms()
+    if (selectedRoom.value) {
+      loadChatMessages(selectedRoom.value.roomId)
+    }
+  }, 5000)
+}
+
+const stopChatPolling = () => {
+  if (chatPollingTimer) {
+    clearInterval(chatPollingTimer)
+    chatPollingTimer = null
+  }
+}
+
+const loadChatRooms = async () => {
+  try {
+    const res = await api.get('/chat/rooms')
+    chatRooms.value = res.data
+    totalUnreadCount.value = res.data.reduce((sum, r) => sum + r.unreadCount, 0)
+  } catch (e) {
+    console.error('채팅방 목록 로드 실패', e)
+  }
+}
+
+const selectRoom = async (room) => {
+  selectedRoom.value = room
+  await loadChatMessages(room.roomId)
+  // 읽음 처리 후 목록 갱신
+  loadChatRooms()
+}
+
+const loadChatMessages = async (roomId) => {
+  try {
+    const res = await api.get(`/chat/rooms/${roomId}/messages`)
+    chatMessages.value = res.data
+    // 스크롤을 맨 아래로
+    setTimeout(() => {
+      if (dmMessagesContainer.value) {
+        dmMessagesContainer.value.scrollTop = dmMessagesContainer.value.scrollHeight
+      }
+    }, 50)
+  } catch (e) {
+    console.error('메시지 로드 실패', e)
+  }
+}
+
+const sendChatMessage = async () => {
+  if (!newMessage.value.trim() || !selectedRoom.value) return
+  try {
+    await api.post(`/chat/rooms/${selectedRoom.value.roomId}/messages`, {
+      content: newMessage.value.trim()
+    })
+    newMessage.value = ''
+    await loadChatMessages(selectedRoom.value.roomId)
+    loadChatRooms()
+  } catch (e) {
+    console.error('메시지 전송 실패', e)
+  }
+}
+
+let searchTimeout = null
+const searchUsersForChat = () => {
+  clearTimeout(searchTimeout)
+  if (!userSearchKeyword.value.trim()) {
+    userSearchResults.value = []
+    return
+  }
+  searchTimeout = setTimeout(async () => {
+    try {
+      const res = await api.get(`/chat/users/search?keyword=${userSearchKeyword.value}`)
+      userSearchResults.value = res.data
+    } catch (e) {
+      console.error('유저 검색 실패', e)
+    }
+  }, 300)
+}
+
+const startChatWith = async (user) => {
+  try {
+    const res = await api.post(`/chat/rooms?otherUsername=${user.username}`)
+    showNewChatModal.value = false
+    userSearchKeyword.value = ''
+    userSearchResults.value = []
+    await loadChatRooms()
+    // 생성된 방 선택
+    selectedRoom.value = res.data
+    await loadChatMessages(res.data.roomId)
+  } catch (e) {
+    console.error('채팅방 생성 실패', e)
+    alert(e.response?.data || '채팅방 생성에 실패했습니다.')
+  }
+}
+
+const startChatWithCreator = async (feed) => {
+  if (!feed || !feed.creator) return
+  if (feed.creator === currentUsername.value) {
+    alert('자신에게는 메시지를 보낼 수 없습니다.')
+    return
+  }
+  
+  // 모달 닫기
+  closeDetail()
+  
+  // 채팅 시작
+  await startChatWith({ username: feed.creator })
+  
+  // 메시지 탭으로 전환
+  if (currentMenu.value !== 'messages') {
+    openMessages()
+  }
+}
+
+const formatChatTime = (timeStr) => {
+  if (!timeStr) return ''
+  const date = new Date(timeStr)
+  const now = new Date()
+  const diff = now - date
+
+  if (diff < 60000) return '방금'
+  if (diff < 3600000) return Math.floor(diff / 60000) + '분 전'
+  if (diff < 86400000) return Math.floor(diff / 3600000) + '시간 전'
+  if (diff < 604800000) return Math.floor(diff / 86400000) + '일 전'
+
+  return date.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })
+}
+// ==== DM 채팅 관련 로직 끝 ====
 
 // 💡 페이지가 처음 켜질 때는 전체(all) 데이터를 불러옵니다.
 onMounted(() => {
@@ -1236,6 +1568,13 @@ const createNewFeed = async () => {
   flex-direction: column;
   overflow: hidden;
 }
+
+.default-feed-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+}
 .search-header {
   padding: 24px 40px;
   display: flex;
@@ -1281,8 +1620,8 @@ const createNewFeed = async () => {
   flex: 1;
 }
 .masonry-grid {
-  column-count: 4;
-  column-gap: 24px;
+  column-count: 5;
+  column-gap: 12px;
 }
 @media (max-width: 1400px) {
   .masonry-grid {
@@ -1298,54 +1637,33 @@ const createNewFeed = async () => {
 .pin-card {
   background-color: #1f1f1f;
   border-radius: 20px;
-  margin-bottom: 24px;
+  margin-bottom: 12px;
   break-inside: avoid;
   position: relative;
   overflow: hidden;
   display: flex;
   align-items: flex-end;
-  padding: 20px;
+  padding: 0; /* Remove padding to let image fill entirely */
   cursor: pointer;
-  background-image: linear-gradient(to bottom, transparent 50%, rgba(0, 0, 0, 0.8) 100%);
 }
-.media-badge {
+.pin-card::after {
+  content: '';
   position: absolute;
-  top: 16px;
-  left: 16px;
-  background-color: rgba(0, 0, 0, 0.6);
-  padding: 6px 12px;
-  border-radius: 20px;
-  font-size: 12px;
-  font-weight: bold;
-  backdrop-filter: blur(4px);
-}
-.collab-badge {
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  background-color: #ff3b30;
-  color: white;
-  padding: 6px 12px;
-  border-radius: 20px;
-  font-size: 12px;
-  font-weight: bold;
-  box-shadow: 0 4px 10px rgba(255, 59, 48, 0.3);
-}
-.pin-content {
-  position: relative;
-  z-index: 2;
+  top: 0;
+  left: 0;
   width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.4);
+  opacity: 0;
+  transition: opacity 0.2s ease-in-out;
+  pointer-events: none;
+  z-index: 1;
 }
-.pin-content h3 {
-  margin: 0 0 6px 0;
-  font-size: 16px;
-  line-height: 1.4;
+.pin-card:hover::after {
+  opacity: 1;
 }
-.pin-content .tag {
-  margin: 0;
-  font-size: 13px;
-  color: #aaa;
-}
+
+
 .card-actions {
   position: absolute;
   top: 12px; /* 카드 맨 위에서 살짝 띄움 */
@@ -1356,22 +1674,23 @@ const createNewFeed = async () => {
   display: flex;
   justify-content: flex-end;
   align-items: flex-start;
-  padding: 16px;
+  padding: 0;
 }
 .pin-card:hover .card-actions {
   opacity: 1;
 }
 .save-btn {
-  background-color: #ff2a5f;
+  background-color: #e60023; /* Pinterest Red */
   color: white;
   border: none;
   padding: 10px 18px;
   border-radius: 24px;
-  font-weight: bold;
+  font-weight: 700;
+  font-size: 15px;
   cursor: pointer;
 }
 .save-btn:hover {
-  background-color: #e0003b;
+  background-color: #b5001c;
 }
 
 /* =========================================
@@ -1759,9 +2078,7 @@ input:checked + .slider:before {
   margin-top: 8px;
 }
 
-.feed-image,
-.pin-image,
-.pin-video {
+.feed-image {
   position: absolute;
   top: 0;
   left: 0;
@@ -1769,6 +2086,15 @@ input:checked + .slider:before {
   height: 100%;
   object-fit: cover;
   z-index: 1; /* 글자보다 뒤에 배치 */
+}
+
+.pin-image,
+.pin-video {
+  width: 100%;
+  height: auto;
+  display: block;
+  object-fit: cover;
+  z-index: 0;
 }
 
 /* 이미지 위에 텍스트가 잘 보이도록 반투명 그라데이션 배경 처리 */
@@ -1783,15 +2109,7 @@ input:checked + .slider:before {
   justify-content: flex-end;
 }
 
-.pin-image {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover; /* 찌그러지지 않고 카드에 꽉 차게 */
-  z-index: 0; /* 가장 뒤로 보내기 */
-}
+
 
 /* 💡 기존 요소들을 이미지 앞으로 당겨오기 */
 .media-badge,
@@ -2721,5 +3039,440 @@ input:checked + .slider:before {
 .more-option-btn.text-red {
   color: #ed4956;
   font-weight: 700;
+}
+
+/* =========================================
+   DM 채팅 CSS
+   ========================================= */
+.messages-page {
+  width: 100%;
+  height: 100vh;
+  display: flex;
+}
+.dm-container {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  background-color: #000;
+}
+
+/* 좌측 사이드바 - 채팅방 목록 */
+.dm-sidebar {
+  width: 380px;
+  min-width: 380px;
+  border-right: 1px solid #262626;
+  display: flex;
+  flex-direction: column;
+  background-color: #000;
+}
+.dm-sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid #262626;
+}
+.dm-sidebar-header h2 {
+  font-size: 20px;
+  font-weight: 700;
+  color: #fafafa;
+  margin: 0;
+}
+.dm-new-chat-btn {
+  background: none;
+  border: none;
+  color: #fafafa;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 50%;
+  transition: background-color 0.2s;
+}
+.dm-new-chat-btn:hover {
+  background-color: #262626;
+}
+.icon-sm {
+  width: 20px;
+  height: 20px;
+}
+
+/* 채팅방 목록 */
+.dm-room-list {
+  flex: 1;
+  overflow-y: auto;
+}
+.dm-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: #8e8e8e;
+}
+.dm-empty-icon {
+  width: 64px;
+  height: 64px;
+  margin-bottom: 16px;
+  opacity: 0.4;
+}
+.dm-start-btn {
+  margin-top: 16px;
+  padding: 10px 24px;
+  background-color: #0095f6;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+.dm-start-btn:hover {
+  background-color: #1877f2;
+}
+
+.dm-room-item {
+  display: flex;
+  align-items: center;
+  padding: 12px 24px;
+  cursor: pointer;
+  transition: background-color 0.15s;
+  gap: 12px;
+}
+.dm-room-item:hover {
+  background-color: #1a1a1a;
+}
+.dm-room-item.active {
+  background-color: #262626;
+}
+.dm-room-avatar {
+  flex-shrink: 0;
+}
+.dm-room-avatar img {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.dm-avatar-placeholder {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #833AB4, #FD1D1D, #F77737);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 700;
+  font-size: 20px;
+}
+.dm-avatar-placeholder.sm {
+  width: 36px;
+  height: 36px;
+  font-size: 14px;
+}
+.dm-room-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.dm-room-name {
+  color: #fafafa;
+  font-size: 15px;
+  font-weight: 600;
+}
+.dm-room-preview {
+  color: #8e8e8e;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dm-room-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.dm-room-time {
+  color: #8e8e8e;
+  font-size: 12px;
+}
+.dm-unread-count {
+  background-color: #0095f6;
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+  min-width: 20px;
+  height: 20px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+}
+
+/* 우측 채팅 영역 */
+.dm-chat-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background-color: #000;
+}
+.dm-no-selection {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #8e8e8e;
+}
+.dm-no-selection-icon {
+  width: 80px;
+  height: 80px;
+  margin-bottom: 16px;
+  opacity: 0.3;
+}
+.dm-no-selection h3 {
+  color: #fafafa;
+  font-size: 22px;
+  margin: 0 0 8px 0;
+}
+.dm-no-selection p {
+  color: #8e8e8e;
+  margin: 0;
+}
+
+/* 채팅 헤더 */
+.dm-chat-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 24px;
+  border-bottom: 1px solid #262626;
+}
+.dm-chat-header-avatar img {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.dm-chat-header-name {
+  color: #fafafa;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+/* 메시지 목록 */
+.dm-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.dm-msg {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  max-width: 65%;
+}
+.dm-msg-mine {
+  align-self: flex-end;
+  align-items: flex-end;
+}
+.dm-msg-bubble {
+  padding: 10px 16px;
+  border-radius: 22px;
+  font-size: 14px;
+  line-height: 1.5;
+  word-break: break-word;
+  background-color: #262626;
+  color: #fafafa;
+}
+.dm-msg-mine .dm-msg-bubble {
+  background-color: #3797f0;
+  color: white;
+}
+.dm-msg-time {
+  font-size: 11px;
+  color: #8e8e8e;
+  margin-top: 4px;
+  padding: 0 8px;
+}
+
+/* 메시지 입력 영역 */
+.dm-input-area {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid #262626;
+}
+.dm-input {
+  flex: 1;
+  padding: 12px 18px;
+  border-radius: 22px;
+  border: 1px solid #363636;
+  background-color: #1a1a1a;
+  color: #fafafa;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.dm-input:focus {
+  border-color: #555;
+}
+.dm-input::placeholder {
+  color: #8e8e8e;
+}
+.dm-send-btn {
+  background-color: #0095f6;
+  color: white;
+  border: none;
+  padding: 10px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s;
+}
+.dm-send-btn:hover {
+  background-color: #1877f2;
+}
+.dm-send-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* 새 대화 모달 */
+.dm-new-chat-modal {
+  background-color: #262626;
+  border-radius: 16px;
+  width: 420px;
+  max-height: 500px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.dm-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #363636;
+}
+.dm-modal-header h3 {
+  margin: 0;
+  color: #fafafa;
+  font-size: 16px;
+  font-weight: 700;
+}
+.dm-modal-close {
+  background: none;
+  border: none;
+  color: #fafafa;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+.dm-modal-search {
+  padding: 12px 20px;
+}
+.dm-search-input {
+  width: 100%;
+  padding: 10px 16px;
+  border-radius: 8px;
+  border: 1px solid #363636;
+  background-color: #1a1a1a;
+  color: #fafafa;
+  font-size: 14px;
+  outline: none;
+  box-sizing: border-box;
+}
+.dm-search-input:focus {
+  border-color: #555;
+}
+.dm-search-input::placeholder {
+  color: #8e8e8e;
+}
+.dm-modal-results {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+.dm-search-result-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 20px;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+.dm-search-result-item:hover {
+  background-color: #363636;
+}
+.dm-search-result-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.dm-search-result-name {
+  color: #fafafa;
+  font-size: 14px;
+  font-weight: 600;
+}
+.dm-search-result-username {
+  color: #8e8e8e;
+  font-size: 13px;
+}
+.dm-no-results {
+  text-align: center;
+  color: #8e8e8e;
+  padding: 20px;
+}
+
+/* 사이드바 unread badge */
+.unread-badge {
+  background-color: #ed4956;
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+  margin-left: auto;
+}
+
+/* Follow Button */
+.follow-btn {
+  background-color: #ff2a5f;
+  color: white;
+  border: none;
+  border-radius: 20px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.follow-btn:hover {
+  background-color: #e02453;
+}
+.follow-btn.is-following {
+  background-color: #333;
+  color: #fff;
+}
+.follow-btn.is-following:hover {
+  background-color: #444;
 }
 </style>

@@ -38,6 +38,9 @@ public class User {
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
+    @Column(name = "is_admin", columnDefinition = "boolean default false")
+    private boolean isAdmin = false;
+
     @PrePersist
     protected void onCreate() {
         this.createdAt = LocalDateTime.now();

@@ -6,6 +6,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 @Getter
 @Setter
 @Builder
@@ -19,4 +21,8 @@ public class UserProfileResponseDto {
     private long postCount;
     private long followerCount;
     private long followingCount;
+    private boolean isFollowing;
+    
+    @JsonProperty("isAdmin")
+    private boolean isAdmin;
 }

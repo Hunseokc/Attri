@@ -10,6 +10,8 @@ import projectSpring.repository.FeedRepository;
 import projectSpring.repository.TagRepository;
 import projectSpring.repository.FeedLikeRepository;
 import projectSpring.repository.CommentRepository;
+import projectSpring.repository.UserRepository;
+import projectSpring.entity.User;
 import projectSpring.entity.FeedLike;
 import projectSpring.entity.Comment;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +24,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
+import java.util.Collections;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -34,6 +37,7 @@ public class FeedService {
     private final BookmarkRepository bookmarkRepository; // 💡 북마크 저장소 연결
     private final FeedLikeRepository feedLikeRepository;
     private final CommentRepository commentRepository;
+    private final UserRepository userRepository;
 
     // Feed 엔티티 DTO로 변환
     private FeedResponseDto convertToDto(Feed feed) {
@@ -67,8 +71,23 @@ public class FeedService {
                 .collect(Collectors.toList());
     }
 
-    public List<FeedResponseDto> getUserFeeds(String username) {
-        return feedRepository.findByCreatorOrderByIdDesc(username).stream()
+    // 3. 내 피드만 조회 (프로필)
+    public List<FeedResponseDto> getUserFeeds(String creator) {
+        return feedRepository.findByCreatorOrderByIdDesc(creator).stream()
+                .map(this::convertToDto)
+                .collect(Collectors.toList());
+    }
+
+    // 4. 내가 팔로우하는 사람들의 피드 조회
+    public List<FeedResponseDto> getFollowingFeeds(String currentUsername) {
+        if (currentUsername == null || currentUsername.equals("anonymousUser")) {
+            return Collections.emptyList();
+        }
+        User user = userRepository.findByUsername(currentUsername).orElse(null);
+        if (user == null) {
+            return Collections.emptyList();
+        }
+        return feedRepository.findFollowingFeeds(user).stream()
                 .map(this::convertToDto)
                 .collect(Collectors.toList());
     }
@@ -160,13 +179,16 @@ public class FeedService {
         );
     }
 
-    // 5. 피드 삭제 메서드
+    // Feed 삭제
     @Transactional
-    public void deleteFeed(Long feedId, String username) {
-        Feed feed = feedRepository.findById(feedId)
+    public void deleteFeed(Long id, String username) {
+        Feed feed = feedRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("게시물을 찾을 수 없습니다."));
 
-        if (!feed.getCreator().equals(username)) {
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
+
+        if (!feed.getCreator().equals(username) && !user.isAdmin()) {
             throw new IllegalArgumentException("삭제 권한이 없습니다.");
         }
 

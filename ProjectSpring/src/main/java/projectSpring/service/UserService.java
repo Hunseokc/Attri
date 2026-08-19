@@ -14,6 +14,8 @@ import projectSpring.dto.UserSignupRequestDto;
 import projectSpring.entity.User;
 import projectSpring.repository.UserRepository;
 import projectSpring.repository.FeedRepository;
+import projectSpring.repository.FollowRepository;
+import projectSpring.entity.Follow;
 import projectSpring.security.JwtTokenProvider;
 
 import java.util.Collections;
@@ -32,6 +34,7 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final FeedRepository feedRepository;
+    private final FollowRepository followRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
     private final RedisTemplate<String, String> redisTemplate;
@@ -111,9 +114,9 @@ public class UserService {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
         
-        // TODO: follower count, following count are mocked for now
-        // since we don't have Follow features yet.
         long postCount = feedRepository.countByCreator(user.getUsername());
+        long followerCount = followRepository.countByFollowing(user);
+        long followingCount = followRepository.countByFollower(user);
         
         return UserProfileResponseDto.builder()
                 .username(user.getUsername())
@@ -121,9 +124,45 @@ public class UserService {
                 .profileImageUrl(user.getProfileImageUrl())
                 .tag(user.getTag())
                 .postCount(postCount)
-                .followerCount(0)
-                .followingCount(0)
+                .followerCount(followerCount)
+                .followingCount(followingCount)
+                .isAdmin(user.isAdmin())
                 .build();
+    }
+
+    @Transactional(readOnly = true)
+    public boolean isFollowing(String currentUserEmail, String targetUsername) {
+        if (currentUserEmail == null || currentUserEmail.equals("anonymousUser")) return false;
+        User currentUser = userRepository.findByEmail(currentUserEmail).orElse(null);
+        User targetUser = userRepository.findByUsername(targetUsername).orElse(null);
+        if (currentUser == null || targetUser == null) return false;
+        return followRepository.existsByFollowerAndFollowing(currentUser, targetUser);
+    }
+
+    @Transactional
+    public boolean toggleFollow(String currentUserEmail, String targetUsername) {
+        User currentUser = userRepository.findByEmail(currentUserEmail)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+        User targetUser = userRepository.findByUsername(targetUsername)
+                .orElseThrow(() -> new IllegalArgumentException("Target user not found"));
+
+        if (currentUser.getId().equals(targetUser.getId())) {
+            throw new IllegalArgumentException("You cannot follow yourself");
+        }
+
+        return followRepository.findByFollowerAndFollowing(currentUser, targetUser)
+                .map(follow -> {
+                    followRepository.delete(follow);
+                    return false; // un-followed
+                })
+                .orElseGet(() -> {
+                    Follow follow = Follow.builder()
+                            .follower(currentUser)
+                            .following(targetUser)
+                            .build();
+                    followRepository.save(follow);
+                    return true; // followed
+                });
     }
 
     @Transactional

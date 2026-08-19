@@ -52,6 +52,12 @@ public class FeedController {
         return feedService.getCommentedFeeds(username);
     }
 
+    // 팔로잉 피드 조회 API
+    @GetMapping("/api/feeds/following")
+    public List<FeedResponseDto> getFollowingFeeds(@RequestParam String username) {
+        return feedService.getFollowingFeeds(username);
+    }
+
     // 피드 삭제 API
     @DeleteMapping("/api/feeds/{id}")
     public void deleteFeed(@PathVariable Long id, @RequestParam String username) {
