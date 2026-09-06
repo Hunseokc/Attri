@@ -18,9 +18,13 @@ public class WebConfig implements WebMvcConfigurer {
                 .maxAge(3600); // preflight 요청 캐시 시간 (1시간)
     }
 
+    @org.springframework.beans.factory.annotation.Value("${file.upload-dir}")
+    private String uploadDir;
+
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
+        String uploadPath = "file:" + uploadDir;
         registry.addResourceHandler("/uploads/**")
-                .addResourceLocations("file:uploads/");
+                .addResourceLocations(uploadPath);
     }
 }

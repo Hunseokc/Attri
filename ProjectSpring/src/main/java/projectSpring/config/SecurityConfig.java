@@ -47,7 +47,7 @@ public class SecurityConfig {
 
             // 요청 권한 설정
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/users/signup", "/api/users/login", "/api/users/refresh", "/uploads/**").permitAll()
+                .requestMatchers("/api/users/signup", "/api/users/login", "/api/users/refresh", "/uploads/**", "/error").permitAll()
                 .anyRequest().authenticated()
             )
             // JWT 인증 필터 등록 (UsernamePasswordAuthenticationFilter 이전에 실행)

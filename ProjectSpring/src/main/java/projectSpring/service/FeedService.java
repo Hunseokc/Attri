@@ -37,6 +37,9 @@ public class FeedService {
     private final BookmarkRepository bookmarkRepository; // 💡 북마크 저장소 연결
     private final FeedLikeRepository feedLikeRepository;
     private final CommentRepository commentRepository;
+
+    @org.springframework.beans.factory.annotation.Value("${file.upload-dir}")
+    private String uploadDir;
     private final UserRepository userRepository;
 
     // Feed 엔티티 DTO로 변환
@@ -119,7 +122,7 @@ public class FeedService {
             try {
                 String originalFilename = file.getOriginalFilename();
                 String filename = UUID.randomUUID() + "_" + originalFilename;
-                Path filePath = Paths.get("uploads", filename);
+                Path filePath = Paths.get(uploadDir, filename);
                 Files.createDirectories(filePath.getParent());
                 Files.write(filePath, file.getBytes());
 
@@ -130,7 +133,7 @@ public class FeedService {
                     
                     // 썸네일 별도 저장
                     String thumbFilename = UUID.randomUUID() + "_thumb_" + thumbnail.getOriginalFilename();
-                    Path thumbFilePath = Paths.get("uploads", thumbFilename);
+                    Path thumbFilePath = Paths.get(uploadDir, thumbFilename);
                     Files.write(thumbFilePath, thumbnail.getBytes());
                     imageUrl = "/uploads/" + thumbFilename; // 이미지 경로에 썸네일 할당
                 } else {

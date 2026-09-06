@@ -268,9 +268,11 @@
           </div>
         </div>
       </div>
+      <!-- ==== 메시지(DM) 뷰 끝 ==== -->
 
       <!-- ==== 프로필 뷰 콘텐츠 ==== -->
-      <div v-else-if="currentMenu === 'profile'" class="profile-page-content">
+      <div v-else-if="currentMenu === 'profile'" class="profile-page-wrapper">
+        <div class="profile-page-content">
         <!-- 1. 프로필 헤더 정보 영역 -->
         <header class="profile-header-centered">
           <div class="profile-avatar-container large-center" @click="triggerDirectProfileImageUpload">
@@ -381,6 +383,7 @@
           <p>사진을 공유하면 회원님의 프로필에 표시됩니다.</p>
           <a href="#" class="share-link">첫 사진 공유하기</a>
         </div>
+      </div>
       </div>
       <!-- ==== 프로필 뷰 콘텐츠 끝 ==== -->
     </main>
@@ -2350,10 +2353,16 @@ input:checked + .slider:before {
   justify-content: center;
 }
 /* ==== 프로필 뷰 스타일 ==== */
+.profile-page-wrapper {
+  flex: 1;
+  overflow-y: auto;
+  width: 100%;
+}
 .profile-page-content {
   width: 100%;
   max-width: 935px;
   margin: 0 auto;
+  padding: 40px 0;
 }
 .profile-header {
   display: flex;
